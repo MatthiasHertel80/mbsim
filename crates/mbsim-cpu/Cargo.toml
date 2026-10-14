@@ -1,0 +1,11 @@
+[package]
+name = "mbsim-cpu"
+description = "ARMv7E-M (Cortex-M4F) instruction-set simulator"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+mbsim-core.workspace = true
+log.workspace = true

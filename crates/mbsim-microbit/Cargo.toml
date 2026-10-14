@@ -1,0 +1,17 @@
+[package]
+name = "mbsim-microbit"
+description = "BBC micro:bit V2 board model and simulation machine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+mbsim-core.workspace = true
+mbsim-cpu.workspace = true
+mbsim-nrf52833.workspace = true
+mbsim-loader.workspace = true
+log.workspace = true
+crossbeam-channel.workspace = true
+
+[dev-dependencies]

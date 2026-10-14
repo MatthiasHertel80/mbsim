@@ -1,0 +1,12 @@
+[package]
+name = "mbsim-nrf52833"
+description = "Register-level model of the Nordic nRF52833 (memories and peripherals)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+mbsim-core.workspace = true
+mbsim-cpu.workspace = true
+log.workspace = true

@@ -1,0 +1,29 @@
+[package]
+name = "mbsim"
+description = "BBC micro:bit V2 simulator with a GDB server for the Arm CMSIS Debugger"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "mbsim"
+path = "src/main.rs"
+
+[dependencies]
+mbsim-core.workspace = true
+mbsim-cpu.workspace = true
+mbsim-nrf52833.workspace = true
+mbsim-microbit.workspace = true
+mbsim-loader.workspace = true
+mbsim-gdb.workspace = true
+mbsim-gui = { workspace = true, optional = true, default-features = false }
+log.workspace = true
+env_logger = "0.11"
+serde = { version = "1", features = ["derive"] }
+serde_yaml_ng = "0.10"
+
+[features]
+default = ["gui", "audio"]
+gui = ["dep:mbsim-gui"]
+audio = ["gui", "mbsim-gui/audio"]

@@ -1,0 +1,18 @@
+[package]
+name = "mbsim-gdb"
+description = "GDB remote serial protocol server of the micro:bit V2 simulator (CMSIS Debugger compatible)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+mbsim-core.workspace = true
+mbsim-cpu.workspace = true
+mbsim-microbit.workspace = true
+mbsim-nrf52833.workspace = true
+crossbeam-channel.workspace = true
+log.workspace = true
+
+[dev-dependencies]
+mbsim-loader.workspace = true

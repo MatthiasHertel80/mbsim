@@ -1,0 +1,39 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "micro:bit V2 simulator (launch)",
+            "type": "gdbtarget",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/Examples/BoardTest",
+            "program": "out/BoardTest/microbit-v2/Debug/BoardTest.elf",
+            "gdb": "arm-none-eabi-gdb",
+            "auxiliaryGdb": true,
+            "initCommands": ["monitor reset halt", "tbreak main"],
+            "customResetCommands": ["monitor reset halt", "maintenance flush register-cache", "maintenance flush dcache", "tbreak main", "continue"],
+            "target": {
+                "server": "mbsim",
+                "serverParameters": ["gdbserver", "--cbuild-run", "${command:cmsis-csolution.getCbuildRunFile}", "--port", "3333", "--uart-tcp", "4444"],
+                "port": "3333"
+            },
+            "cmsis": {
+                "cbuildRunFile": "${command:cmsis-csolution.getCbuildRunFile}",
+                "updateConfiguration": "manual"
+            }
+        },
+        {
+            "name": "micro:bit V2 simulator (attach)",
+            "type": "gdbtarget",
+            "request": "attach",
+            "cwd": "${workspaceFolder}/Examples/BoardTest",
+            "program": "out/BoardTest/microbit-v2/Debug/BoardTest.elf",
+            "gdb": "arm-none-eabi-gdb",
+            "auxiliaryGdb": true,
+            "target": { "port": "3333" },
+            "cmsis": {
+                "cbuildRunFile": "${command:cmsis-csolution.getCbuildRunFile}",
+                "updateConfiguration": "manual"
+            }
+        }
+    ]
+}

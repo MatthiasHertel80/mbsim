@@ -1,0 +1,50 @@
+# MicroPython for the micro:bit V2 (CODAL), driven through the REPL on the USB serial port.
+# Get the firmware: https://github.com/microbit-foundation/micropython-microbit-v2/releases (v2.1.2,
+# micropython-microbit-v2.1.2.hex), then:
+#   mbsim micropython-microbit-v2.1.2.hex --headless --speed max --scenario tests/scenarios/micropython.yaml
+- at: 2.5
+  uart: "from microbit import *\r"
+- at: 2.7
+  uart: "display.show(Image.HEART)\r"
+- at: 3.0
+  expect-leds: ["01010", "11111", "11111", "01110", "00100"]
+- at: 3.1
+  press: A
+  tilt: [0, 0]
+  temperature: 25
+- at: 3.2
+  uart: "print('acc', accelerometer.get_x(), accelerometer.get_y(), accelerometer.get_z())\r"
+- at: 3.4
+  expect-uart: "acc 0 0 -1024"
+  uart: "print('btn', button_a.is_pressed(), button_b.is_pressed())\r"
+- at: 3.6
+  expect-uart: "btn True False"
+  release: A
+  uart: "print('temp', temperature())\r"
+- at: 3.8
+  expect-uart: "temp 25"
+  touch: true
+- at: 3.9
+  uart: "print('logo', pin_logo.is_touched())\r"
+- at: 4.1
+  expect-uart: "logo True"
+  touch: false
+  uart: "print('mag', compass.get_x(), compass.get_y(), compass.get_z())\r"
+- at: 4.3
+  expect-uart: "mag 0 -19950 45000"
+  uart: "import music\r"
+- at: 4.5
+  uart: "music.pitch(440, 1000, wait=False)\r"
+- at: 4.8
+  expect-tone: 440
+- at: 5.6
+  uart: "microphone.sound_level()\r"    # the first call switches the microphone on and returns 0
+- at: 5.7
+  sound: [20, 800]
+- at: 6.0
+  uart: "print('mic', microphone.sound_level() > 50)\r"
+- at: 6.2
+  expect-uart: "mic True"
+  sound: [0, 800]
+- at: 6.3
+  exit: true

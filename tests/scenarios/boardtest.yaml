@@ -1,0 +1,54 @@
+# BoardTest from MicroBit::MicroBit_V2_BSP: every peripheral of the board support.
+- at: 1.2
+  expect-uart: "BBC micro:bit V2 BoardTest (nRF52833, SystemCoreClock 64000000 Hz)"
+- at: 1.2
+  expect-uart: "LSM303AGR: found (WHO_AM_I 0x33 / 0x40)"
+- at: 1.2
+  expect-uart: "Touch logo baseline: 194"
+- at: 1.3
+  expect-leds: ["00000", "00000", "00100", "00000", "00000"]   # level: dot in the centre
+- at: 1.4
+  tilt: [40, 0]
+- at: 1.5
+  expect-leds: ["00000", "00000", "00001", "00000", "00000"]   # right side down: dot moves right
+- at: 1.6
+  tilt: [0, -40]
+- at: 1.7
+  expect-leds: ["00100", "00000", "00000", "00000", "00000"]   # top edge down: dot moves up
+- at: 1.8
+  tilt: [0, 0]
+  press: A
+- at: 1.9
+  expect-leds: ["01110", "10001", "11111", "10001", "10001"]   # 'A'
+- at: 2.0
+  press: B
+- at: 2.1
+  expect-leds: ["00100", "00100", "11111", "00100", "00100"]   # '+' for both buttons
+- at: 2.2
+  release: AB
+  touch: true
+- at: 2.3
+  expect-leds: ["01010", "11111", "11111", "01110", "00100"]   # heart while touched
+- at: 2.35
+  expect-tone: 440
+- at: 2.5
+  touch: false
+- at: 2.6
+  expect-tone: 0
+- at: 2.7
+  uart: "t"
+- at: 2.75
+  expect-tone: 880
+- at: 3.2
+  expect-uart: "tone 880 Hz"
+- at: 3.3
+  clap: 13
+- at: 3.35
+  expect-leds: ["00100", "00100", "00100", "00000", "00100"]   # '!' after a loud sound
+- at: 4.0
+  temperature: 30
+- at: 5.5
+  expect-uart: "temp=30.00 C"
+- at: 5.6
+  expect-uart: "btnA=0 btnB=0"
+  exit: true

@@ -1,0 +1,5 @@
+/target
+/out
+*.mbrec
+.DS_Store
+/firmware/*/out

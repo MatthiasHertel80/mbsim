@@ -1,0 +1,23 @@
+[package]
+name = "mbsim-gui"
+description = "GUI of the micro:bit V2 simulator: board optics and inputs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+mbsim-core.workspace = true
+mbsim-microbit.workspace = true
+mbsim-nrf52833.workspace = true
+mbsim-loader.workspace = true
+log.workspace = true
+crossbeam-channel.workspace = true
+eframe = "0.36"
+egui = "0.36"
+cpal = { version = "0.18", optional = true }
+png = "0.18"
+
+[features]
+default = ["audio"]
+audio = ["dep:cpal"]

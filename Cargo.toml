@@ -1,0 +1,32 @@
+[workspace]
+resolver = "2"
+members = ["crates/mbsim-core", "crates/mbsim-cpu", "crates/mbsim-nrf52833", "crates/mbsim-loader", "crates/mbsim-microbit", "crates/mbsim-gdb", "crates/mbsim-gui", "crates/mbsim"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+rust-version = "1.95"
+repository = "https://github.com/MatthiasHertelArm/microbit-v2-sim"
+
+[workspace.dependencies]
+mbsim-core = { path = "crates/mbsim-core" }
+mbsim-cpu = { path = "crates/mbsim-cpu" }
+mbsim-nrf52833 = { path = "crates/mbsim-nrf52833" }
+mbsim-microbit = { path = "crates/mbsim-microbit" }
+mbsim-loader = { path = "crates/mbsim-loader" }
+mbsim-gdb = { path = "crates/mbsim-gdb" }
+mbsim-gui = { path = "crates/mbsim-gui", default-features = false }
+crossbeam-channel = "0.5"
+log = "0.4"
+
+[profile.release]
+debug = 1
+lto = "thin"
+codegen-units = 1
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 2
