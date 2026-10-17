@@ -14,10 +14,14 @@ use mbsim_core::Ticks;
 use mbsim_microbit::board::Orientation;
 use mbsim_microbit::runtime::{Cmd, Input, Simulator, Speed, Status};
 use optics::Optics;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 pub struct GuiOptions {
     pub title: String,
+    /// Start with the host microphone feeding the board's microphone.
+    pub mic: bool,
 }
 
 /// Runs the GUI on the current (main) thread until the window closes.
@@ -31,9 +35,33 @@ pub fn run(sim: Simulator, opts: GuiOptions) -> Result<(), String> {
         ..Default::default()
     };
     let title = opts.title.clone();
-    eframe::run_native(&title, native, Box::new(move |cc| Ok(Box::new(App::new(cc, sim))))).map_err(|e| e.to_string())?;
+    eframe::run_native(
+        &title,
+        native,
+        Box::new(move |cc| {
+            let mut app = App::new(cc, sim);
+            if opts.mic {
+                app.set_mic(true);
+            }
+            Ok(Box::new(app))
+        }),
+    )
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
+
+/// Default of mV at the microphone output for a full-scale host sample: a host MEMS microphone
+/// at -26 dBFS/Pa against the 12.6 mV/Pa (-38 dBV/Pa) of the SPU0410.
+const MIC_FULL_SCALE_MV: f32 = 250.0;
+
+/// Hint when the host microphone delivers only zeros: the operating system withholds it.
+const MIC_SILENT: &str = if cfg!(target_os = "macos") {
+    "no sound yet: allow microphone access for the app that started mbsim (System Settings › Privacy & Security › Microphone)"
+} else if cfg!(target_os = "windows") {
+    "no sound yet: allow microphone access for desktop apps (Settings › Privacy & security › Microphone)"
+} else {
+    "no sound yet: check the input device and its level"
+};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Side {
@@ -68,6 +96,16 @@ struct App {
     sound_mv: f64,
     sound_hz: f64,
     mic_noise: f64,
+    /// Host microphone, while it feeds the board's microphone.
+    mic: Option<audio::Mic>,
+    mic_error: Option<String>,
+    mic_full_scale_mv: f32,
+    /// `mic_full_scale_mv` for the audio thread (f32 bits).
+    mic_gain: Arc<AtomicU32>,
+    /// Peak level for the meter (full scale 1.0), whether any sound came yet, and since when.
+    mic_level: f32,
+    mic_heard: bool,
+    mic_since: Instant,
     shake_until: Option<Instant>,
     // terminal
     uart_rx: Receiver<Vec<u8>>,
@@ -110,6 +148,13 @@ impl App {
             sound_mv: inputs.sound_mv,
             sound_hz: inputs.sound_hz,
             mic_noise: inputs.mic_noise_mv,
+            mic: None,
+            mic_error: None,
+            mic_full_scale_mv: MIC_FULL_SCALE_MV,
+            mic_gain: Arc::new(AtomicU32::new(MIC_FULL_SCALE_MV.to_bits())),
+            mic_level: 0.0,
+            mic_heard: false,
+            mic_since: Instant::now(),
             shake_until: None,
             uart_rx,
             terminal: String::new(),
@@ -176,8 +221,41 @@ impl App {
         }
     }
 
+    /// Switches the host microphone on or off. Its blocks go from the audio thread straight to
+    /// the simulation, so they keep coming while the window is not redrawn.
+    fn set_mic(&mut self, on: bool) {
+        self.mic = None;
+        self.mic_error = None;
+        if !on {
+            return;
+        }
+        let sim = self.sim.clone();
+        let gain = self.mic_gain.clone();
+        let sink = move |rate: f64, block: &[f32]| {
+            let g = f32::from_bits(gain.load(Ordering::Relaxed));
+            sim.send(Cmd::Input(Input::LiveSound { rate, mv: block.iter().map(|s| s * g).collect() }));
+        };
+        match audio::Mic::open(sink) {
+            Ok(m) => {
+                self.mic = Some(m);
+                self.mic_level = 0.0;
+                self.mic_heard = false;
+                self.mic_since = Instant::now();
+            }
+            Err(e) => {
+                log::warn!("microphone not available: {e}");
+                self.mic_error = Some(e);
+            }
+        }
+    }
+
     fn poll(&mut self) {
         self.status = self.sim.status();
+        if let Some(m) = &self.mic {
+            let p = m.take_peak();
+            self.mic_level = p.max(self.mic_level * 0.85);
+            self.mic_heard |= p > 0.0;
+        }
         let now = self.status.time;
         if now < self.last_time {
             // reset of the timeline (new image or power cycle)
@@ -459,6 +537,37 @@ impl App {
         }
         ui.separator();
         ui.heading("Microphone");
+        let mut live = self.mic.is_some();
+        if ui
+            .checkbox(&mut live, "host microphone")
+            .on_hover_text("the computer's default input device feeds the board's microphone in real time")
+            .changed()
+        {
+            self.set_mic(live);
+        }
+        if let Some(mic) = &self.mic {
+            let db = 20.0 * self.mic_level.max(1e-5).log10();
+            ui.add(egui::ProgressBar::new(((db + 60.0) / 60.0).clamp(0.0, 1.0)).text(format!("{db:.0} dBFS")));
+            if ui
+                .add(egui::Slider::new(&mut self.mic_full_scale_mv, 1.0..=2000.0).logarithmic(true).text("mV full scale"))
+                .on_hover_text("mV at the board's microphone output for a full-scale sample of the host microphone")
+                .changed()
+            {
+                self.mic_gain.store(self.mic_full_scale_mv.to_bits(), Ordering::Relaxed);
+            }
+            ui.label(RichText::new(&mic.device).small().weak());
+            let warn = Color32::from_rgb(0xe0, 0xb0, 0x60);
+            if let Some(e) = mic.error() {
+                ui.label(RichText::new(e).small().color(warn));
+            } else if !self.mic_heard && self.mic_since.elapsed() > Duration::from_secs(2) {
+                ui.label(RichText::new(MIC_SILENT).small().color(warn));
+            }
+            if self.status.speed_max || (self.status.speed_factor - 1.0).abs() > 1e-6 {
+                ui.label(RichText::new("live sound needs speed 1x: at other speeds parts of it are lost").small().weak());
+            }
+        } else if let Some(e) = &self.mic_error {
+            ui.label(RichText::new(format!("no microphone: {e}")).small().color(Color32::from_rgb(0xe0, 0xb0, 0x60)));
+        }
         let s1 = ui.add(egui::Slider::new(&mut self.sound_mv, 0.0..=40.0).text("sound mV"));
         let s2 = ui.add(egui::Slider::new(&mut self.sound_hz, 50.0..=4000.0).logarithmic(true).text("Hz"));
         if s1.changed() || s2.changed() {

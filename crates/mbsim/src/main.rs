@@ -229,10 +229,13 @@ fn run(cfg: Config) -> Result<(), String> {
         });
     }
 
+    if cfg.mic && cfg.headless {
+        log::warn!("--mic needs the window; ignored with --headless");
+    }
     if !cfg.headless {
         #[cfg(feature = "gui")]
         {
-            return mbsim_gui::run(sim, mbsim_gui::GuiOptions { title: cfg.title.clone() });
+            return mbsim_gui::run(sim, mbsim_gui::GuiOptions { title: cfg.title.clone(), mic: cfg.mic });
         }
         #[cfg(not(feature = "gui"))]
         log::warn!("built without the GUI; running headless");

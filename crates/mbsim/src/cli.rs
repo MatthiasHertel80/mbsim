@@ -16,7 +16,7 @@ usage:
   mbsim -C GDBServer.port=N -a IMAGE [...]  FVP-compatible options (CMSIS Arm-FVP debug adapter):
                                             -C, -f FILE, -a, --simlimit, --stat; -C parameters ending in
                                             disable-visualisation, shutdown_on_eot, out_file (-), speed,
-                                            uart_port, semihosting-enable or persist set mbsim options
+                                            uart_port, semihosting-enable, persist or mic set mbsim options
 
 options:
   --cbuild-run FILE     images (and GDB port) from a CMSIS-Toolbox *.cbuild-run.yml
@@ -27,6 +27,7 @@ options:
   --uart-tcp N          serve the target UART on TCP port N (VS Code Serial Monitor: TCP mode)
   --uart-stdout         print the target UART on stdout (default with --headless)
   --uart-stdin          send stdin to the target UART
+  --mic                 the host microphone feeds the board's microphone (window)
   --send SECONDS:TEXT   send TEXT to the target UART after SECONDS of wall time
   --speed X|max         simulation speed factor (default 1 = real time)
   --time SECONDS        stop after this simulated time (headless)
@@ -62,6 +63,8 @@ pub struct Config {
     pub version: bool,
     #[cfg_attr(not(feature = "gui"), allow(dead_code))]
     pub title: String,
+    #[cfg_attr(not(feature = "gui"), allow(dead_code))]
+    pub mic: bool,
     pub scenario: Option<PathBuf>,
     pub control_port: u16,
     pub exit_on_eot: bool,
@@ -90,6 +93,7 @@ impl Default for Config {
             help: false,
             version: false,
             title: "BBC micro:bit V2 simulator".into(),
+            mic: false,
             scenario: None,
             control_port: crate::control::DEFAULT_PORT,
             exit_on_eot: false,
@@ -150,6 +154,7 @@ pub fn parse(raw: Vec<String>) -> Result<Config, String> {
             "--allow-remote" => c.bind = "0.0.0.0".into(),
             "--uart-stdout" => c.uart_stdout = true,
             "--uart-stdin" => c.uart_stdin = true,
+            "--mic" => c.mic = true,
             "--send" => {
                 let v = value(&args, &mut i, a)?;
                 let (t, text) = v.split_once(':').ok_or("--send SECONDS:TEXT")?;
@@ -219,6 +224,7 @@ fn parse_fvp(args: &[String]) -> Result<Config, String> {
             }
             "--simlimit" => c.max_time = Some(value(args, &mut i, a)?.parse().map_err(|_| "--simlimit SECONDS")?),
             "--headless" => c.headless = true,
+            "--mic" => c.mic = true,
             "--stat" => c.stats = true,
             "-h" | "--help" => c.help = true,
             "--version" => c.version = true,
@@ -241,6 +247,7 @@ fn parse_fvp(args: &[String]) -> Result<Config, String> {
             "semihosting-enable" => c.semihosting = on(v),
             "speed" => c.speed = speed(v)?,
             "persist" => c.persist = on(v),
+            "mic" => c.mic = on(v),
             _ => log::info!("ignoring FVP parameter {k}={v}"),
         }
     }
@@ -260,6 +267,29 @@ mod tests {
         let c = parse(v(&["-D", "--plugin", "/x/GDBServer.so\n", "-C", "GDBServer.port=3333\n", "-a", "out/app.elf"])).unwrap();
         assert_eq!(c.gdb_port, Some(3333));
         assert_eq!(c.images, vec![PathBuf::from("out/app.elf")]);
+    }
+
+    #[test]
+    fn fvp_adapter_template() {
+        // what the Arm-FVP template of CMSIS Solution passes for `args: -C sim.uart_port=4444 -C sim.mic=1`
+        let c = parse(v(&[
+            "-D",
+            "--plugin",
+            "/GDBServer.so\n",
+            "-C",
+            "GDBServer.port=3333\n",
+            "-C\n",
+            "sim.uart_port=4444\n",
+            "-C\n",
+            "sim.mic=1\n",
+            "-a\n",
+            "/work/out/BoardTest/microbit-v2/Debug/BoardTest.elf",
+        ]))
+        .unwrap();
+        assert_eq!(c.gdb_port, Some(3333));
+        assert_eq!(c.uart_tcp, Some(4444));
+        assert!(c.mic);
+        assert_eq!(c.images, vec![PathBuf::from("/work/out/BoardTest/microbit-v2/Debug/BoardTest.elf")]);
     }
 
     #[test]

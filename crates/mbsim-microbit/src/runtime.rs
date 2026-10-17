@@ -38,6 +38,12 @@ pub enum Input {
     },
     Clap(f64),
     MicNoise(f64),
+    /// A block of sound recorded live (the host microphone): mV at the microphone output at
+    /// `rate` samples per second. The microphone hears it in real time.
+    LiveSound {
+        rate: f64,
+        mv: Vec<f32>,
+    },
     ResetButton,
 }
 
@@ -635,6 +641,7 @@ impl SimThread {
             }
             Input::Clap(mv) => b.clap(now, mv),
             Input::MicNoise(mv) => b.inputs.mic_noise_mv = mv,
+            Input::LiveSound { rate, mv } => b.live_sound(now, rate, &mv),
             Input::ResetButton => {
                 self.m.reset_button();
                 self.resync_pacing();

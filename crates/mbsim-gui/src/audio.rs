@@ -1,10 +1,14 @@
 //! Speaker output: the MLT-8530 is driven through a MOSFET from P0.00. Samples are the exact
 //! fraction of each sample period in which the gate is high (box-filtered edges), followed by a
 //! DC blocker, and are played through the host's default audio output.
+//!
+//! Microphone input: the host's default input device, mixed down to mono, for the board's
+//! microphone.
 
 use mbsim_core::time::TICKS_PER_SEC;
 use mbsim_core::Ticks;
 use std::collections::VecDeque;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 pub struct Synth {
@@ -170,6 +174,111 @@ fn open_output(buf: Arc<Mutex<VecDeque<f32>>>) -> Result<(cpal::Stream, f64), St
     .map_err(|e| e.to_string())?;
     stream.play().map_err(|e| e.to_string())?;
     Ok((stream, rate))
+}
+
+/// The host microphone while it records.
+pub struct Mic {
+    #[cfg(feature = "audio")]
+    _stream: cpal::Stream,
+    /// Name of the input device.
+    pub device: String,
+    /// Highest absolute sample since the last `take_peak` (f32 bits).
+    peak: Arc<AtomicU32>,
+    /// Last stream error (device unplugged, access revoked).
+    error: Arc<Mutex<Option<String>>>,
+}
+
+impl Mic {
+    /// Starts recording from the default input device. `sink` receives each block on the audio
+    /// thread: the sample rate and mono samples with full scale 1.0.
+    pub fn open(sink: impl FnMut(f64, &[f32]) + Send + 'static) -> Result<Mic, String> {
+        let peak = Arc::new(AtomicU32::new(0));
+        let error = Arc::new(Mutex::new(None::<String>));
+        #[cfg(feature = "audio")]
+        {
+            let (stream, device) = open_input(sink, peak.clone(), error.clone())?;
+            Ok(Mic { _stream: stream, device, peak, error })
+        }
+        #[cfg(not(feature = "audio"))]
+        {
+            let _ = (sink, peak, error);
+            Err("built without audio".into())
+        }
+    }
+
+    /// Highest absolute sample (full scale 1.0) since the last call.
+    pub fn take_peak(&self) -> f32 {
+        f32::from_bits(self.peak.swap(0, Ordering::Relaxed))
+    }
+
+    pub fn error(&self) -> Option<String> {
+        self.error.lock().ok().and_then(|e| e.clone())
+    }
+}
+
+#[cfg(feature = "audio")]
+fn open_input(
+    sink: impl FnMut(f64, &[f32]) + Send + 'static,
+    peak: Arc<AtomicU32>,
+    error: Arc<Mutex<Option<String>>>,
+) -> Result<(cpal::Stream, String), String> {
+    use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+    use cpal::SampleFormat as F;
+    let host = cpal::default_host();
+    let dev = host.default_input_device().ok_or("no input device")?;
+    let sup = dev.default_input_config().map_err(|e| e.to_string())?;
+    let fmt = sup.sample_format();
+    let config: cpal::StreamConfig = sup.into();
+    let stream = match fmt {
+        F::F32 => build_input::<f32>(&dev, config, sink, peak, error),
+        F::F64 => build_input::<f64>(&dev, config, sink, peak, error),
+        F::I8 => build_input::<i8>(&dev, config, sink, peak, error),
+        F::I16 => build_input::<i16>(&dev, config, sink, peak, error),
+        F::I24 => build_input::<cpal::I24>(&dev, config, sink, peak, error),
+        F::I32 => build_input::<i32>(&dev, config, sink, peak, error),
+        F::U8 => build_input::<u8>(&dev, config, sink, peak, error),
+        F::U16 => build_input::<u16>(&dev, config, sink, peak, error),
+        f => return Err(format!("unsupported sample format {f:?}")),
+    }
+    .map_err(|e| e.to_string())?;
+    stream.play().map_err(|e| e.to_string())?;
+    Ok((stream, dev.to_string()))
+}
+
+#[cfg(feature = "audio")]
+fn build_input<T>(
+    dev: &cpal::Device,
+    config: cpal::StreamConfig,
+    mut sink: impl FnMut(f64, &[f32]) + Send + 'static,
+    peak: Arc<AtomicU32>,
+    error: Arc<Mutex<Option<String>>>,
+) -> Result<cpal::Stream, cpal::Error>
+where
+    T: cpal::SizedSample,
+    f32: cpal::FromSample<T>,
+{
+    use cpal::traits::DeviceTrait;
+    let channels = (config.channels as usize).max(1);
+    let rate = config.sample_rate as f64;
+    let mut mono = Vec::new();
+    dev.build_input_stream(
+        config,
+        move |data: &[T], _: &cpal::InputCallbackInfo| {
+            mono.clear();
+            mono.extend(data.chunks(channels).map(|f| f.iter().map(|s| s.to_sample::<f32>()).sum::<f32>() / f.len() as f32));
+            let p = mono.iter().fold(0.0f32, |m, s| m.max(s.abs()));
+            // non-negative floats order like their bit patterns
+            peak.fetch_max(p.to_bits(), Ordering::Relaxed);
+            sink(rate, &mono);
+        },
+        move |e| {
+            log::warn!("microphone stream error: {e}");
+            if let Ok(mut s) = error.lock() {
+                *s = Some(e.to_string());
+            }
+        },
+        None,
+    )
 }
 
 #[cfg(feature = "audio")]

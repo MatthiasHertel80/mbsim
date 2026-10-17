@@ -8,6 +8,7 @@ use crate::pins::*;
 use mbsim_core::time::{to_secs, TICKS_PER_SEC};
 use mbsim_core::Ticks;
 use mbsim_nrf52833::board::{BoardIo, I2cResult, PinDrive, NUM_PINS};
+use std::collections::VecDeque;
 
 /// Board orientation: heading of the top edge (degrees from north, clockwise), roll (right side
 /// down positive) and pitch (edge connector down positive).
@@ -103,6 +104,68 @@ struct Burst {
     decay_s: f64,
 }
 
+/// Sound recorded live (the host microphone), placed on the simulated timeline. Blocks arrive as
+/// the host records them and are appended to the stream, which plays a little behind its newest
+/// sample so that a late block does not leave a gap. The stream is re-anchored when it has run dry
+/// or runs too far ahead, as it does when the simulation is not in real time.
+#[derive(Debug, Default)]
+struct LiveSound {
+    /// Samples per second.
+    rate: f64,
+    /// Simulated time of `samples[0]` in ticks.
+    start: f64,
+    /// mV at the microphone output.
+    samples: VecDeque<f32>,
+}
+
+impl LiveSound {
+    /// Lead over the simulated time on top of two blocks: the jitter of the host's audio
+    /// callbacks and of the real-time pacing.
+    const MARGIN_S: f64 = 0.03;
+
+    fn push(&mut self, now: Ticks, rate: f64, mv: &[f32]) {
+        if mv.is_empty() || !rate.is_finite() || rate <= 0.0 {
+            return;
+        }
+        if rate != self.rate {
+            self.rate = rate;
+            self.samples.clear();
+        }
+        let now = now as f64;
+        let tick = TICKS_PER_SEC as f64 / rate;
+        // drop what has been played, keeping one sample before `now` for the interpolation
+        let played = ((now - self.start) / tick).floor() - 1.0;
+        if played >= 1.0 {
+            let n = (played as usize).min(self.samples.len());
+            self.samples.drain(..n);
+            self.start += n as f64 * tick;
+        }
+        let fresh = self.samples.is_empty();
+        self.samples.extend(mv);
+        let block = mv.len() as f64 * tick;
+        let target = 2.0 * block + Self::MARGIN_S * TICKS_PER_SEC as f64;
+        let lead = self.start + self.samples.len() as f64 * tick - now;
+        // a lead below one block means the samples before this block ran out
+        if fresh || lead < block || lead > 2.0 * target {
+            self.start = now + target - self.samples.len() as f64 * tick;
+        }
+    }
+
+    /// mV at time `now`, linearly interpolated; 0 outside the stream.
+    fn at(&self, now: Ticks) -> f64 {
+        let x = (now as f64 - self.start) * self.rate / TICKS_PER_SEC as f64;
+        if x < 0.0 {
+            return 0.0;
+        }
+        let i = x as usize;
+        if i + 1 >= self.samples.len() {
+            return 0.0;
+        }
+        let f = x - i as f64;
+        self.samples[i] as f64 * (1.0 - f) + self.samples[i + 1] as f64 * f
+    }
+}
+
 pub struct MicrobitBoard {
     pub inputs: Inputs,
     pub elec: Electrical,
@@ -117,6 +180,7 @@ pub struct MicrobitBoard {
     logo: Pad,
     mic_on_since: Option<Ticks>,
     bursts: Vec<Burst>,
+    live: LiveSound,
 }
 
 impl Default for MicrobitBoard {
@@ -185,6 +249,7 @@ impl MicrobitBoard {
             logo: Pad { v: 3.3, t: 0, driven: None, pull: 0 },
             mic_on_since: None,
             bursts: Vec::new(),
+            live: LiveSound::default(),
         }
     }
 
@@ -232,6 +297,13 @@ impl MicrobitBoard {
     pub fn clap(&mut self, t: Ticks, amplitude_mv: f64) {
         self.bursts.retain(|b| to_secs(t.saturating_sub(b.t)) < 1.0);
         self.bursts.push(Burst { t, amplitude_mv, decay_s: 0.015 });
+    }
+
+    /// A block of sound recorded live at `rate` samples per second, in mV at the microphone
+    /// output, that arrived at time `now`. The microphone hears it in real time, a few tens of
+    /// milliseconds later.
+    pub fn live_sound(&mut self, now: Ticks, rate: f64, mv: &[f32]) {
+        self.live.push(now, rate, mv);
     }
 
     fn logo_tau(&self) -> f64 {
@@ -301,6 +373,7 @@ impl MicrobitBoard {
                 v += b.amplitude_mv * 1e-3 * (-age / b.decay_s).exp() * noise(now / 512, 0xC1A9) * supply;
             }
         }
+        v += self.live.at(now) * 1e-3 * supply;
         // white noise, bandwidth about 16 kHz (new value every 61 us), Gaussian-like (sum of 3)
         let slot = now / (TICKS_PER_SEC / 16384);
         let n = (noise(slot, 1) + noise(slot, 2) + noise(slot, 3)) * 1.0;
@@ -449,5 +522,57 @@ mod tests {
         b.inputs.orientation.pitch = 90.0;
         let s = board_to_sensor(b.accel_board_mg());
         assert!(s[1] > 999.0, "edge connector down gives positive sensor y");
+    }
+
+    const MS: Ticks = TICKS_PER_SEC / 1000;
+
+    /// Pushes block `k` (480 samples at 48 kHz, each sample its index in the stream) at `now`.
+    fn push_block(s: &mut LiveSound, now: Ticks, k: usize) {
+        let block: Vec<f32> = (0..480).map(|j| (k * 480 + j) as f32).collect();
+        s.push(now, 48_000.0, &block);
+    }
+
+    #[test]
+    fn live_sound_plays_in_real_time() {
+        let mut s = LiveSound::default();
+        for k in 0..200 {
+            push_block(&mut s, k as Ticks * 10 * MS, k);
+            // two blocks plus the margin behind: sample 0 plays at 50 - 10 = 40 ms
+            let t = k as Ticks * 10 * MS + 3 * MS;
+            let want = if t < 40 * MS { 0.0 } else { (t - 40 * MS) as f64 * 48_000.0 / TICKS_PER_SEC as f64 };
+            assert!((s.at(t) - want).abs() < 1e-3, "block {k}: {} != {want}", s.at(t));
+        }
+        assert!(s.samples.len() < 4000, "played samples are dropped: {}", s.samples.len());
+    }
+
+    #[test]
+    fn live_sound_reanchors() {
+        let mut s = LiveSound::default();
+        for k in 0..10 {
+            push_block(&mut s, k as Ticks * 10 * MS, k);
+        }
+        // the host stops for 200 ms: the stream runs dry, then restarts with the next block
+        assert_eq!(s.at(150 * MS), 0.0);
+        push_block(&mut s, 300 * MS, 10);
+        assert_eq!(s.at(300 * MS), 0.0, "already played samples do not come back");
+        assert!((s.at(341 * MS) - 4848.0).abs() < 1e-3, "{}", s.at(341 * MS));
+        // the simulation stands still (paused): the stream stays bounded
+        for k in 11..1000 {
+            push_block(&mut s, 300 * MS, k);
+        }
+        assert!(s.samples.len() < 7200, "{}", s.samples.len());
+    }
+
+    #[test]
+    fn live_sound_at_the_microphone() {
+        let mut b = MicrobitBoard::new();
+        b.inputs.mic_noise_mv = 0.0;
+        b.pin_drive(0, RUN_MIC, PinDrive { output: true, level: true, ..Default::default() });
+        let bias = b.mic_voltage(100 * MS);
+        // a 10 ms block at 100 ms plays from 140 ms to 150 ms
+        b.live_sound(100 * MS, 48_000.0, &[20.0; 480]);
+        assert_eq!(b.mic_voltage(135 * MS), bias);
+        let v = b.mic_voltage(145 * MS);
+        assert!((v - bias - 0.020).abs() < 1e-9, "{v} {bias}");
     }
 }

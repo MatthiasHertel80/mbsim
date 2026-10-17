@@ -31,7 +31,8 @@ licence and the CMSIS Debugger adapter files in `cmsis/`; `SHA256SUMS` has the c
 
 - The binaries are not signed. On macOS, clear the quarantine attribute after unpacking:
   `xattr -d com.apple.quarantine mbsim`.
-- On Linux, the board window needs X11 or Wayland with libxkbcommon, and sound needs libasound2.
+- On Linux, the board window needs X11 or Wayland with libxkbcommon, and sound (speaker and host microphone)
+  needs libasound2.
 
 ## Build
 
@@ -63,6 +64,12 @@ In the window:
   buttons; **R** resets; **F** flips between the front and the back.
 - Right-drag tilts the board; the side panel shakes it and sets heading, temperature, sound at the microphone, finger
   capacitance and the LED persistence of the eye (or the instantaneous "camera" view).
+- **host microphone** in the side panel (or `--mic` on the command line) lets the board hear the computer's
+  default input device, live: the panel shows its level, and "mV full scale" sets how loud a full-scale host
+  sample is at the board's microphone (default 250 mV, a typical MEMS microphone). The sound plays in real time,
+  so it needs speed 1x. The first time, the operating system asks for microphone access: on macOS for the app
+  that started `mbsim` (Terminal, VS Code), on Windows under Settings › Privacy & security › Microphone ›
+  "Let desktop apps access your microphone". Linux records through ALSA (PipeWire and PulseAudio included).
 - The UART panel is the USB serial port. Dropping a `.hex` or `.elf` on the window programs the board.
 - Hovering over an LED shows its brightness; hovering over ring 0, 1 or 2 shows what the nRF52833 drives on
   the pin.
@@ -91,17 +98,18 @@ Three ways to use it in VS Code:
            debugger:
              name: Arm-FVP
              model: /path/to/mbsim
-             args: --uart-tcp 4444
+             args: -C sim.uart_port=4444
            images:
              - project-context: BoardTest.Debug
    ```
 
    The FVP template turns the auxiliary connection off, so Live Watch stays off in this mode.
-   `config-file:` is read like an FVP parameter file (`instance.parameter=value  # comment`);
-   mbsim acts on the last part of each name: `disable-visualisation` (no window),
-   `shutdown_on_eot` (exit when the firmware sends 0x04, for test runs), `out_file=-` (UART on
-   stdout), `speed`, `uart_port`, `semihosting-enable`, `persist`. `--simlimit` and `--stat` work
-   as on the FVP.
+   mbsim options are FVP parameters, in `args:` as `-C name=value` or in a `config-file:`, which is
+   read like an FVP parameter file (`instance.parameter=value  # comment`). mbsim acts on the last
+   part of each name: `disable-visualisation` (no window), `shutdown_on_eot` (exit when the firmware
+   sends 0x04, for test runs), `out_file=-` (UART on stdout), `speed`, `uart_port`,
+   `semihosting-enable`, `persist`, `mic` (host microphone on). `--simlimit` and `--stat` work as on
+   the FVP.
 2. **Own debug adapter `microbit-v2-sim`** — `mbsim register-cmsis-adapter` shows where it would install
    [cmsis/microbit-v2-sim.adapter.json](cmsis/microbit-v2-sim.adapter.json) and the `debug-adapters.yml`
    entry; `--apply --backup-dir DIR` installs them. Then `debugger: name: microbit-v2-sim`.
