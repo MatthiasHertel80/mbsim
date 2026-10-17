@@ -1967,7 +1967,7 @@ checksum = "dae608c151f68243f2b000364e1f7b186d9c29845f7d2d85bd31b9ad77ad552b"
 
 [[package]]
 name = "mbsim"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "env_logger",
  "log",
@@ -1984,11 +1984,11 @@ dependencies = [
 
 [[package]]
 name = "mbsim-core"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "mbsim-cpu"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "log",
  "mbsim-core",
@@ -1996,7 +1996,7 @@ dependencies = [
 
 [[package]]
 name = "mbsim-gdb"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "crossbeam-channel",
  "log",
@@ -2009,7 +2009,7 @@ dependencies = [
 
 [[package]]
 name = "mbsim-gui"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "cpal",
  "crossbeam-channel",
@@ -2025,7 +2025,7 @@ dependencies = [
 
 [[package]]
 name = "mbsim-loader"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ihex",
  "object",
@@ -2035,7 +2035,7 @@ dependencies = [
 
 [[package]]
 name = "mbsim-microbit"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "crossbeam-channel",
  "log",
@@ -2047,7 +2047,7 @@ dependencies = [
 
 [[package]]
 name = "mbsim-nrf52833"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "log",
  "mbsim-core",
