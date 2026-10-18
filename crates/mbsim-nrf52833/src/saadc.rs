@@ -2,9 +2,13 @@
 //!
 //! RESULT = (V(P) - V(N)) * GAIN / REFERENCE * 2^(RESOLUTION - m), m = 0 single-ended, 1
 //! differential. Input voltages come from the board at the end of the acquisition time.
+//!
+//! With SAMPLERATE MODE=Timers the internal timer samples every CC / 16 MHz from START until STOP
+//! (nRF52833 PS v1.3, p.363). It keeps its phase across END: a sample taken before the next START
+//! prepares a buffer is not stored.
 
 use crate::env::{inten_write, Env};
-use mbsim_core::time::us;
+use mbsim_core::time::{us, TICKS_PER_16MHZ};
 use mbsim_core::{Slot, Ticks};
 
 const STARTED: u32 = 1 << 0;
@@ -62,6 +66,9 @@ pub struct Saadc {
     /// RESULT.AMOUNT restarts with the first sample written after START, so the value of the
     /// previous buffer stays readable when END restarts the SAADC through PPI.
     amount_reset_pending: bool,
+    /// The internal timer (SAMPLERATE MODE=Timers) runs; it takes its next sample at `next_tick`.
+    timer: bool,
+    next_tick: Ticks,
 }
 
 impl Saadc {
@@ -96,6 +103,8 @@ impl Saadc {
             os_acc: 0,
             os_n: 0,
             amount_reset_pending: false,
+            timer: false,
+            next_tick: 0,
         }
     }
 
@@ -170,8 +179,20 @@ impl Saadc {
                 self.started = true;
                 self.pending = Some(Pending::Started);
                 env.schedule(self.slot, now + us(1) / 4);
+                if self.samplerate & (1 << 12) != 0 && !self.timer {
+                    self.timer = true;
+                    self.next_tick = now + us(1) / 4 + self.timer_period();
+                    let n = self.active_channels().len();
+                    if n != 1 {
+                        env.warn.warn(now, format!("SAADC: internal timer with {n} channels enabled (needs exactly one)"));
+                    }
+                    if self.samplerate & 0x7FF < 80 {
+                        env.warn.warn(now, "SAADC: SAMPLERATE CC below 80 is undefined");
+                    }
+                }
             }
-            0x004 if v & 1 != 0 && self.enable & 1 != 0 && self.started && !self.busy => {
+            // The internal timer triggers the samples itself.
+            0x004 if v & 1 != 0 && self.enable & 1 != 0 && self.started && !self.busy && !self.timer => {
                 self.busy = true;
                 self.scan_index = 0;
                 self.schedule_conversion(now, env);
@@ -179,6 +200,7 @@ impl Saadc {
             0x008 if v & 1 != 0 => {
                 self.busy = false;
                 self.started = false;
+                self.timer = false;
                 self.pending = Some(Pending::Stopped);
                 env.schedule(self.slot, now + us(1) / 4);
             }
@@ -198,12 +220,7 @@ impl Saadc {
             }
             0x5F0 => self.resolution = v & 7,
             0x5F4 => self.oversample = v & 0xF,
-            0x5F8 => {
-                self.samplerate = v & 0x17FF;
-                if self.samplerate & (1 << 12) != 0 {
-                    env.warn.warn(now, "SAADC: SAMPLERATE MODE=Timers is not modelled");
-                }
-            }
+            0x5F8 => self.samplerate = v & 0x17FF,
             0x62C => self.result_ptr = v,
             0x630 => self.result_maxcnt = v & 0x7FFF,
             _ => {}
@@ -223,6 +240,26 @@ impl Saadc {
             4 => us(20),
             _ => us(40),
         }
+    }
+
+    /// Sample interval of the internal timer: CC periods of 16 MHz.
+    fn timer_period(&self) -> Ticks {
+        (self.samplerate & 0x7FF).max(80) as Ticks * TICKS_PER_16MHZ
+    }
+
+    /// Schedules the next sample of the internal timer. START, CALIBRATEOFFSET and scans use the
+    /// same scheduler slot, so the timer resumes after them at its own phase.
+    fn resume_timer(&mut self, env: &mut Env) {
+        if !self.timer {
+            return;
+        }
+        let period = self.timer_period();
+        while self.next_tick <= env.now {
+            self.next_tick += period;
+        }
+        self.scan_index = 0;
+        self.pending = Some(Pending::Conversion);
+        env.schedule(self.slot, self.next_tick);
     }
 
     fn schedule_conversion(&mut self, now: Ticks, env: &mut Env) {
@@ -276,16 +313,27 @@ impl Saadc {
 
     pub fn event(&mut self, env: &mut Env) {
         match self.pending.take() {
-            Some(Pending::Started) => self.ev(STARTED),
+            Some(Pending::Started) => {
+                self.ev(STARTED);
+                self.resume_timer(env);
+            }
             Some(Pending::Stopped) => {
                 if self.count > 0 {
                     self.result_amount = self.count;
                 }
                 self.ev(STOPPED | END);
             }
-            Some(Pending::Calibration) => self.ev(CALIBRATEDONE),
+            Some(Pending::Calibration) => {
+                self.ev(CALIBRATEDONE);
+                self.resume_timer(env);
+            }
             Some(Pending::Conversion) => {
                 let chans = self.active_channels();
+                if self.timer && (!self.started || chans.is_empty()) {
+                    // no buffer since END, or no channel: the sample is lost
+                    self.resume_timer(env);
+                    return;
+                }
                 let ch = chans[self.scan_index.min(chans.len() - 1)];
                 let v = self.convert(ch, env);
                 let os = 1u32 << self.oversample.min(8);
@@ -297,6 +345,7 @@ impl Saadc {
                     self.ev(DONE);
                     if self.os_n < os {
                         self.busy = false;
+                        self.resume_timer(env);
                         return;
                     }
                 }
@@ -335,8 +384,97 @@ impl Saadc {
                     self.ev(END);
                     self.started = false;
                 }
+                self.resume_timer(env);
             }
             None => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::board::NullBoard;
+    use crate::env::{slot, Warnings, RAM_BASE, RAM_SIZE};
+    use crate::gpio::Gpio;
+    use mbsim_core::Scheduler;
+
+    struct Rig {
+        now: Ticks,
+        sched: Scheduler,
+        ram: Vec<u8>,
+        gpio: Gpio,
+        board: NullBoard,
+        warn: Warnings,
+    }
+
+    impl Rig {
+        fn new() -> Self {
+            Rig {
+                now: 0,
+                sched: Scheduler::new(slot::COUNT),
+                ram: vec![0; RAM_SIZE as usize],
+                gpio: Gpio::new(),
+                board: NullBoard::default(),
+                warn: Warnings::default(),
+            }
+        }
+
+        fn env(&mut self) -> Env<'_> {
+            Env {
+                now: self.now,
+                sched: &mut self.sched,
+                ram: &mut self.ram,
+                gpio: &mut self.gpio,
+                board: &mut self.board,
+                warn: &mut self.warn,
+            }
+        }
+
+        /// Runs the SAADC's events up to `until`; returns the times of END.
+        fn run(&mut self, s: &mut Saadc, until: Ticks) -> Vec<Ticks> {
+            let mut ends = Vec::new();
+            while let Some(t) = self.sched.next_time().filter(|&t| t <= until) {
+                self.now = t;
+                self.sched.pop_due(t);
+                s.event(&mut self.env());
+                if s.events & END != 0 {
+                    s.events &= !END;
+                    ends.push(t);
+                }
+            }
+            self.now = until;
+            ends
+        }
+    }
+
+    #[test]
+    fn internal_timer_samples_from_start_until_stop() {
+        let mut rig = Rig::new();
+        let mut s = Saadc::new(slot::SAADC);
+        s.write(0x500, 1, &mut rig.env());
+        s.write(0x510, 4, &mut rig.env()); // CH[0].PSELP = AIN3
+        s.write(0x5F8, (1 << 12) | 1000, &mut rig.env()); // 16 MHz / 1000 = 16 kHz
+        s.write(0x62C, RAM_BASE, &mut rig.env());
+        s.write(0x630, 8, &mut rig.env());
+        s.write(0x000, 1, &mut rig.env());
+        let start = us(1) / 4;
+        let period = 1000 * TICKS_PER_16MHZ;
+        assert_eq!(rig.run(&mut s, 300_000), [start + 8 * period]);
+        assert_eq!(s.result_amount, 8);
+        assert!(rig.warn.list.is_empty(), "{:?}", rig.warn.list);
+
+        // START after END: the timer keeps its phase, the samples in between are lost.
+        rig.ram[16..32].fill(0xFF);
+        s.write(0x62C, RAM_BASE + 16, &mut rig.env());
+        s.write(0x004, 1, &mut rig.env()); // SAMPLE is ignored while the timer runs
+        s.write(0x000, 1, &mut rig.env());
+        assert_eq!(rig.run(&mut s, 600_000), [start + 17 * period]);
+        assert!(rig.ram[16..32].iter().all(|&b| b == 0));
+
+        s.write(0x008, 1, &mut rig.env());
+        rig.run(&mut s, 700_000);
+        assert_eq!(s.events & STOPPED, STOPPED);
+        assert_eq!(rig.sched.next_time(), None, "STOP stops the internal timer");
     }
 }

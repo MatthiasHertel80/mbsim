@@ -266,7 +266,7 @@ Coverage:
 | TIMER0–4 | LED Matrix (TIMER1) | Timer and counter modes, prescaler, 8/16/24/32-bit, CC[4]/CC[6], `CAPTURE`, shorts, interrupts | 1 |
 | UARTE0 | UART | EasyDMA `TXD`/`RXD` with `MAXCNT`/`AMOUNT`, `STARTRX`/`STOPRX`, `ENDRX_STARTRX` short, `RXSTARTED`, `RXTO`, `ERRORSRC`, exact frame time from the `BAUDRATE` value (0x01D60000 is 115108 baud) | 1 |
 | TWIM0 | I2C, Motion Sensor | `STARTTX`/`STARTRX`/`STOP`, `LASTTX_STARTRX`/`LASTRX_STOP` shorts, `ERRORSRC` (address/data NACK, overrun), bit time per `FREQUENCY`, bus to the board's I2C devices | 1 |
-| SAADC | Microphone | One-shot and scan, gain 1/6…4, internal 0.6 V and VDD/4 references, `TACQ` + 2 µs conversion, oversampling, `RESULT` EasyDMA, limits, calibration task; input voltage from the board's analog nets | 1 |
+| SAADC | Microphone | One-shot, scan and internal sample timer (`SAMPLERATE` MODE=Timers), gain 1/6…4, internal 0.6 V and VDD/4 references, `TACQ` + 2 µs conversion, oversampling, `RESULT` EasyDMA, limits, calibration task; input voltage from the board's analog nets | 1 |
 | PWM0 | Speaker | Prescaler, up and up-down modes, `COUNTERTOP`, all four decoder modes, `SEQ[0..1]` with `REFRESH`/`ENDDELAY`, `LOOP`, shorts, polarity bit 15, pin output edges into the pin log | 1 |
 | TEMP | Temperature | 36 µs conversion, `TEMP` in 0.25 °C from the board temperature input, the `A0..B5/T0..T4` registers that SystemInit copies from FICR | 1 |
 | FPU (peripheral) | | IRQ 38 from FPSCR cumulative flags | 1 |

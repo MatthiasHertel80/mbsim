@@ -17,7 +17,7 @@ records the decisions taken while building it.
 | Part | Model |
 |:--|:--|
 | Cortex-M4F r0p1 | ARMv7E-M Thumb-2, DSP, FPv4-SP-D16 with lazy stacking, exceptions and faults, NVIC (48 IRQs, 3 priority bits), SysTick, MPU, DWT (CYCCNT, 4 comparators), FPB (6 + 2), ITM, ROM table. Bit-identical to Arm `FVP_MPS2_Cortex-M4` on the ISA test (174 groups). |
-| nRF52833 | CLOCK/POWER, NVMC, FICR/UICR, GPIO P0/P1, GPIOTE, PPI (incl. fixed channels), EGU0–5, TIMER0–4, RTC0–2, UARTE0, TWIM0/1, SAADC (oversampling, scan, EasyDMA), PWM0–3, TEMP, RNG, WDT, MWU (registers only). Unmodelled registers read as zero and are reported once. |
+| nRF52833 | CLOCK/POWER, NVMC, FICR/UICR, GPIO P0/P1, GPIOTE, PPI (incl. fixed channels), EGU0–5, TIMER0–4, RTC0–2, UARTE0, TWIM0/1, SAADC (oversampling, scan, internal sample timer, EasyDMA), PWM0–3, TEMP, RNG, WDT, MWU (registers only). Unmodelled registers read as zero and are reported once. |
 | Board | 5×5 LED matrix, buttons A/B, capacitive touch logo (RC model), LSM303AGR accelerometer and magnetometer, MEMS microphone with its power pin and LED, speaker, interface MCU (I2C protocol at 0x70/0x72, COMBINED_SENSOR_INT), UART over USB, reset button, edge-connector rings. |
 
 Time is kept in 512 MHz ticks; peripherals are event-driven, so a sleeping core costs nothing. A release build
