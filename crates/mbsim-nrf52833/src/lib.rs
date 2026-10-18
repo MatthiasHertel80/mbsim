@@ -790,4 +790,9 @@ impl<B: BoardIo> Bus for System<B> {
     fn code_generation(&self) -> u64 {
         self.mem.code_gen
     }
+
+    #[inline]
+    fn code_page_generation(&self, page: u32) -> u64 {
+        self.mem.page_gen[page as usize]
+    }
 }

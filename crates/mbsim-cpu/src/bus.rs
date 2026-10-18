@@ -5,6 +5,9 @@
 
 use mbsim_core::Ticks;
 
+/// Page size of the decode cache: the unit of [`Bus::code_page_generation`].
+pub const CODE_PAGE_SIZE: u32 = 0x1000;
+
 /// A bus error response; the core turns it into a BusFault.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BusError;
@@ -55,5 +58,11 @@ pub trait Bus {
     /// Changes whenever the cacheable code memory is written (flash programming).
     fn code_generation(&self) -> u64 {
         0
+    }
+
+    /// Changes whenever page `page` ([`CODE_PAGE_SIZE`] bytes) of the cacheable code memory is
+    /// written. The default follows [`Bus::code_generation`], so any write drops all decoded code.
+    fn code_page_generation(&self, _page: u32) -> u64 {
+        self.code_generation()
     }
 }

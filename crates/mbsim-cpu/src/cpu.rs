@@ -1,6 +1,6 @@
 //! Core state, the exception model (DDI 0403E B1.5) and the run loop.
 
-use crate::bus::{Bus, BusError, ResetRequest};
+use crate::bus::{Bus, BusError, ResetRequest, CODE_PAGE_SIZE};
 use crate::decode::{decode, is_32bit, Instr};
 use crate::scs::{Dwt, Fpb, Itm, Mpu, SysTick};
 use mbsim_core::time::{ceil_cpu_cycle, TICKS_PER_CPU_CYCLE};
@@ -209,11 +209,18 @@ pub struct Cpu {
     pub(crate) extra_cycles: u32,
     /// Number of exceptions taken (statistics).
     pub exceptions_taken: u64,
-    /// Decoded instructions of the cacheable code memory (per halfword).
+    /// Decoded instructions of the cacheable code memory (per halfword); a size of 0 marks a
+    /// halfword that is not decoded yet.
     icache: Vec<Instr>,
     icache_size: Vec<u8>,
+    /// `Bus::code_page_generation` of each page when its instructions were decoded.
+    icache_page_gen: Vec<u64>,
+    /// `Bus::code_generation` the pages were last checked against.
     icache_gen: u64,
 }
+
+/// Halfwords in a page of the decode cache.
+const PAGE_HALFWORDS: usize = (CODE_PAGE_SIZE / 2) as usize;
 
 impl Default for Cpu {
     fn default() -> Self {
@@ -301,6 +308,7 @@ impl Cpu {
             exceptions_taken: 0,
             icache: Vec::new(),
             icache_size: Vec::new(),
+            icache_page_gen: Vec::new(),
             icache_gen: u64::MAX,
         };
         c.power_on_reset_debug();
@@ -1190,9 +1198,7 @@ impl Cpu {
         if pc < limit {
             let gen = bus.code_generation();
             if gen != self.icache_gen || self.icache.len() != (limit / 2) as usize {
-                self.icache = vec![Instr::Undefined; (limit / 2) as usize];
-                self.icache_size = vec![0; (limit / 2) as usize];
-                self.icache_gen = gen;
+                self.sync_decode_cache(bus, limit, gen);
             }
             let i = (pc >> 1) as usize;
             let sz = self.icache_size[i];
@@ -1200,11 +1206,35 @@ impl Cpu {
                 return Ok((self.icache[i], sz as u32));
             }
             let r = Self::decode_at(bus, pc)?;
-            self.icache[i] = r.0;
-            self.icache_size[i] = r.1 as u8;
+            // a 32-bit instruction in the last halfword of a page ends in the next page, whose
+            // writes do not reach this one: it is decoded each time
+            if !(i + 1).is_multiple_of(PAGE_HALFWORDS) || r.1 == 2 {
+                self.icache[i] = r.0;
+                self.icache_size[i] = r.1 as u8;
+            }
             return Ok(r);
         }
         Self::decode_at(bus, pc)
+    }
+
+    /// Brings the decode cache in line with the code memory after a write: a page whose
+    /// generation changed forgets its decoded instructions, the other pages keep them.
+    #[cold]
+    fn sync_decode_cache<B: Bus>(&mut self, bus: &B, limit: u32, gen: u64) {
+        let n = (limit / 2) as usize;
+        if self.icache.len() != n {
+            self.icache = vec![Instr::Undefined; n];
+            self.icache_size = vec![0; n];
+            self.icache_page_gen = (0..n.div_ceil(PAGE_HALFWORDS) as u32).map(|p| bus.code_page_generation(p)).collect();
+        }
+        for (p, (g, size)) in self.icache_page_gen.iter_mut().zip(self.icache_size.chunks_mut(PAGE_HALFWORDS)).enumerate() {
+            let now = bus.code_page_generation(p as u32);
+            if *g != now {
+                *g = now;
+                size.fill(0);
+            }
+        }
+        self.icache_gen = gen;
     }
 
     fn decode_at<B: Bus>(bus: &mut B, pc: u32) -> Result<(Instr, u32), ()> {
@@ -1283,5 +1313,121 @@ impl Cpu {
     /// Next time the core has its own event (SysTick wrap).
     pub fn next_internal_event(&self) -> Ticks {
         self.systick.next_wrap
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const MOVS_R0_1: u16 = 0x2001;
+    const MOVS_R0_2: u16 = 0x2002;
+    const MOVS_R0_3: u16 = 0x2003;
+    const MOVS_R0_4: u16 = 0x2004;
+    /// First halfword of `MOV.W r0, #imm`; the second holds the immediate.
+    const MOV_W_R0: u16 = 0xF04F;
+
+    /// Four pages of code memory that count writes per page, or for all pages together.
+    struct CodeBus {
+        mem: Vec<u8>,
+        gen: u64,
+        page_gen: Vec<u64>,
+        per_page: bool,
+    }
+
+    impl CodeBus {
+        fn new(per_page: bool) -> Self {
+            CodeBus { mem: vec![0; 4 * CODE_PAGE_SIZE as usize], gen: 0, page_gen: vec![0; 4], per_page }
+        }
+
+        /// Stores a halfword as a flash write the bus reports, or with `silent` as a change the
+        /// decode cache cannot see (to tell a cached instruction from a decoded one).
+        fn put16(&mut self, addr: u32, hw: u16, silent: bool) {
+            let a = addr as usize;
+            self.mem[a..a + 2].copy_from_slice(&hw.to_le_bytes());
+            if !silent {
+                self.gen += 1;
+                self.page_gen[(addr / CODE_PAGE_SIZE) as usize] += 1;
+            }
+        }
+    }
+
+    impl Bus for CodeBus {
+        fn read(&mut self, _now: Ticks, _addr: u32, _size: u8, _debug: bool) -> Result<u32, BusError> {
+            Err(BusError)
+        }
+
+        fn write(&mut self, _now: Ticks, _addr: u32, _size: u8, _value: u32, _debug: bool) -> Result<(), BusError> {
+            Err(BusError)
+        }
+
+        fn fetch16(&mut self, addr: u32) -> Result<u16, BusError> {
+            let a = addr as usize;
+            self.mem.get(a..a + 2).map(|b| u16::from_le_bytes([b[0], b[1]])).ok_or(BusError)
+        }
+
+        fn deadline(&self) -> Ticks {
+            Ticks::MAX
+        }
+
+        fn take_irq_lines(&mut self) -> Option<u64> {
+            None
+        }
+
+        fn code_cache_limit(&self) -> u32 {
+            self.mem.len() as u32
+        }
+
+        fn code_generation(&self) -> u64 {
+            self.gen
+        }
+
+        fn code_page_generation(&self, page: u32) -> u64 {
+            if self.per_page {
+                self.page_gen[page as usize]
+            } else {
+                self.gen
+            }
+        }
+    }
+
+    fn fetch(cpu: &mut Cpu, bus: &mut CodeBus, pc: u32) -> (Instr, u32) {
+        cpu.fetch_decode(bus, pc).unwrap()
+    }
+
+    #[test]
+    fn flash_write_drops_only_its_page() {
+        let mut bus = CodeBus::new(true);
+        let mut cpu = Cpu::new();
+        bus.put16(0x0000, MOVS_R0_1, true);
+        bus.put16(0x1000, MOVS_R0_2, true);
+        assert_eq!(fetch(&mut cpu, &mut bus, 0x0000), (decode(MOVS_R0_1, 0), 2));
+        assert_eq!(fetch(&mut cpu, &mut bus, 0x1000), (decode(MOVS_R0_2, 0), 2));
+        bus.put16(0x0000, MOVS_R0_3, true);
+        bus.put16(0x1000, MOVS_R0_4, false);
+        assert_eq!(fetch(&mut cpu, &mut bus, 0x1000), (decode(MOVS_R0_4, 0), 2), "written page decoded again");
+        assert_eq!(fetch(&mut cpu, &mut bus, 0x0000), (decode(MOVS_R0_1, 0), 2), "other page still cached");
+    }
+
+    #[test]
+    fn bus_without_page_generations_drops_all() {
+        let mut bus = CodeBus::new(false);
+        let mut cpu = Cpu::new();
+        bus.put16(0x0000, MOVS_R0_1, true);
+        assert_eq!(fetch(&mut cpu, &mut bus, 0x0000), (decode(MOVS_R0_1, 0), 2));
+        bus.put16(0x0000, MOVS_R0_3, true);
+        bus.put16(0x1000, MOVS_R0_4, false);
+        assert_eq!(fetch(&mut cpu, &mut bus, 0x0000), (decode(MOVS_R0_3, 0), 2));
+    }
+
+    #[test]
+    fn instruction_across_pages_sees_write_to_next_page() {
+        let mut bus = CodeBus::new(true);
+        let mut cpu = Cpu::new();
+        bus.put16(0x0FFE, MOV_W_R0, true);
+        bus.put16(0x1000, 0x0001, true);
+        assert_eq!(fetch(&mut cpu, &mut bus, 0x0FFE), (decode(MOV_W_R0, 0x0001), 4));
+        bus.put16(0x1000, 0x0002, false);
+        assert_eq!(fetch(&mut cpu, &mut bus, 0x0FFE), (decode(MOV_W_R0, 0x0002), 4));
     }
 }

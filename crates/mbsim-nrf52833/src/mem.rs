@@ -4,6 +4,8 @@ use crate::env::{RAM_BASE, RAM_SIZE};
 
 pub const FLASH_SIZE: u32 = 0x8_0000;
 pub const PAGE_SIZE: u32 = 0x1000;
+// the decode cache of the core counts flash writes per flash page
+const _: () = assert!(PAGE_SIZE == mbsim_cpu::bus::CODE_PAGE_SIZE);
 pub const CODE_RAM_BASE: u32 = 0x0080_0000;
 pub const FICR_BASE: u32 = 0x1000_0000;
 pub const UICR_BASE: u32 = 0x1000_1000;
@@ -17,6 +19,8 @@ pub struct Memory {
     pub flash_dirty: bool,
     /// Incremented on every flash change (invalidates decoded code).
     pub code_gen: u64,
+    /// Per flash page: incremented when that page changes (invalidates its decoded code).
+    pub page_gen: Vec<u64>,
 }
 
 /// FICR words that are not 0xFFFFFFFF on an nRF52833 (QIAA, build code AAB0).
@@ -77,6 +81,7 @@ impl Memory {
             uicr: vec![0xFFFF_FFFF; 1024],
             flash_dirty: false,
             code_gen: 0,
+            page_gen: vec![0; (FLASH_SIZE / PAGE_SIZE) as usize],
         }
     }
 
@@ -94,8 +99,7 @@ impl Memory {
         let base = (addr & !(PAGE_SIZE - 1)) as usize;
         if base < FLASH_SIZE as usize {
             self.flash[base..base + PAGE_SIZE as usize].fill(0xFF);
-            self.flash_dirty = true;
-            self.code_gen += 1;
+            self.flash_changed(addr);
         }
     }
 
@@ -104,6 +108,14 @@ impl Memory {
         self.uicr.fill(0xFFFF_FFFF);
         self.flash_dirty = true;
         self.code_gen += 1;
+        self.page_gen.iter_mut().for_each(|g| *g += 1);
+    }
+
+    /// Notes a change of the flash page holding `addr`.
+    fn flash_changed(&mut self, addr: u32) {
+        self.flash_dirty = true;
+        self.code_gen += 1;
+        self.page_gen[(addr / PAGE_SIZE) as usize] += 1;
     }
 
     /// Programs a flash word (bits can only change from 1 to 0).
@@ -112,8 +124,7 @@ impl Memory {
         if a + 4 <= FLASH_SIZE as usize {
             let old = u32::from_le_bytes(self.flash[a..a + 4].try_into().unwrap());
             self.flash[a..a + 4].copy_from_slice(&(old & v).to_le_bytes());
-            self.flash_dirty = true;
-            self.code_gen += 1;
+            self.flash_changed(addr);
         } else if (UICR_BASE..UICR_BASE + 0x1000).contains(&addr) {
             let i = ((addr - UICR_BASE) / 4) as usize;
             self.uicr[i] &= v;
@@ -126,8 +137,7 @@ impl Memory {
         if addr < FLASH_SIZE {
             if self.flash[addr as usize] != b {
                 self.flash[addr as usize] = b;
-                self.flash_dirty = true;
-                self.code_gen += 1;
+                self.flash_changed(addr);
             }
             true
         } else if (UICR_BASE..UICR_BASE + 0x1000).contains(&addr) {
@@ -142,5 +152,29 @@ impl Memory {
         } else {
             false
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn changed_pages(m: &Memory, before: &[u64]) -> Vec<usize> {
+        m.page_gen.iter().zip(before).enumerate().filter(|(_, (a, b))| a != b).map(|(p, _)| p).collect()
+    }
+
+    #[test]
+    fn flash_changes_count_per_page() {
+        let mut m = Memory::new();
+        let g = m.page_gen.clone();
+        m.program_word(0x3004, 0x1234_5678);
+        m.erase_page(0x5ABC);
+        m.load_byte(0x7000, 0xFF); // already erased: no change
+        m.load_byte(0x7001, 0x12);
+        assert_eq!(changed_pages(&m, &g), [3, 5, 7]);
+        assert_eq!(m.code_gen, 3);
+        let g = m.page_gen.clone();
+        m.erase_all();
+        assert_eq!(changed_pages(&m, &g).len(), (FLASH_SIZE / PAGE_SIZE) as usize);
     }
 }
