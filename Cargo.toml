@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/mbsim-core", "crates/mbsim-cpu", "crates/mbsim-nrf52833", "crates/mbsim-loader", "crates/mbsim-microbit", "crates/mbsim-gdb", "crates/mbsim-gui", "crates/mbsim"]
 
 [workspace.package]
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 license = "Apache-2.0"
 rust-version = "1.95"
