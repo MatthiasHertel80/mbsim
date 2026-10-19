@@ -54,8 +54,6 @@ jobs:
           key: ${{ matrix.target }}-${{ hashFiles('Cargo.lock') }}
       - name: Build
         run: cargo build --release --locked --target ${{ matrix.target }} -p mbsim
-      - name: Headless build
-        run: cargo build --release --locked --target ${{ matrix.target }} -p mbsim --no-default-features
       - name: Test
         if: ${{ !matrix.cross }}
         run: cargo test --workspace --release --locked --target ${{ matrix.target }}

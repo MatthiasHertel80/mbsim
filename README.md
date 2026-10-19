@@ -41,9 +41,6 @@ Rust 1.95 or later.
 ```sh
 cargo build --release
 # Linux needs the ALSA headers for audio: sudo apt install libasound2-dev
-# build without audio or without the window:
-cargo build --release -p mbsim --no-default-features                 # headless only
-cargo build --release -p mbsim --no-default-features --features gui  # window without audio
 ```
 
 The binary is `target/release/mbsim`.
