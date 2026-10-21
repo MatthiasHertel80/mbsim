@@ -9,6 +9,15 @@ It simulates the board that the CMSIS-Pack `MicroBit::MicroBit_V2_BSP` describes
 (Blinky, BoardTest) run unmodified without hardware. MicroPython 2.1 (CODAL) runs too: display, buttons,
 touch logo, accelerometer, compass, temperature, microphone and speaker.
 
+![The board window running MicroPython: a heart on the LED matrix, the REPL in the UART panel, the inputs in the side panel](docs/mbsim-window.png)
+
+<!-- docs/mbsim-window.png, with MicroPython 2.1.2 (see tests/scenarios/micropython.yaml):
+     MBSIM_SCREENSHOT=docs/mbsim-window.png:4.5 mbsim micropython-microbit-v2.1.2.hex \
+       --send '2:from microbit import *\r' --send '2.8:display.show(Image.HEART)\r' -->
+
+[Getting started](docs/getting-started.md) shows how to use it standalone, with your own firmware or with
+MicroPython, and in Keil Studio for VS Code.
+
 [PLAN.md](PLAN.md) has the scope, architecture and fidelity contract; [docs/decisions/](docs/decisions/)
 records the decisions taken while building it.
 
