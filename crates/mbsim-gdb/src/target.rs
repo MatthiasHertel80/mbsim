@@ -121,7 +121,7 @@ pub fn memory_map_xml() -> String {
 }
 
 pub fn monitor_help() -> &'static str {
-    "Monitor commands of the micro:bit V2 simulator:\n\
+    "Monitor commands of mbsim:\n\
      \x20 reset [halt|run]          reset the board (default: halt at the reset vector)\n\
      \x20 halt                      halt the core\n\
      \x20 sim time                  simulated time\n\

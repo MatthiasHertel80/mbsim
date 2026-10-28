@@ -1,11 +1,11 @@
 # Debug adapter entry for the CMSIS-Toolbox / CMSIS Solution catalog (debug-adapters.yml).
 # Installed by "mbsim register-cmsis-adapter"; select it in a csolution with
 #   debugger:
-#     name: microbit-v2-sim
+#     name: mbsim
 debug-adapters:
-  - name: "microbit-v2-sim"
-    alias-name: ["mbsim", "micro:bit-sim"]
-    template: microbit-v2-sim.adapter.json
+  - name: "mbsim"
+    alias-name: ["microbit-v2-sim"]
+    template: mbsim.adapter.json
     defaults:
       gdbserver:
         active:

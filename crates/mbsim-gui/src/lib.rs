@@ -1,4 +1,4 @@
-//! GUI of the micro:bit V2 simulator: the board as it looks (front and back, LED light output,
+//! GUI of mbsim: the board as it looks (front and back, LED light output,
 //! microphone, power and USB LEDs, speaker), the physical inputs, the UART terminal and the
 //! simulation controls.
 

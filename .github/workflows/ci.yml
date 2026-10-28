@@ -113,8 +113,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cat > notes.md <<EOF
-          BBC micro:bit V2 simulator $GITHUB_REF_NAME: Cortex-M4F instruction-set simulator, nRF52833
-          peripherals and board, GDB server for the Arm CMSIS Debugger, board window.
+          mbsim $GITHUB_REF_NAME: instruction-set simulator that works with the BBC micro:bit V2 (Nordic
+          nRF52833, Arm Cortex-M4F), with a GDB server for the Arm CMSIS Debugger and a board window.
+          A personal open-source project, not affiliated with or endorsed by Arm or the Micro:bit
+          Educational Foundation.
 
           One archive per host: \`mbsim\` (\`mbsim.exe\`), the README, the licence and the CMSIS Debugger
           adapter files in \`cmsis/\`. The binaries are not signed: on macOS, clear the quarantine

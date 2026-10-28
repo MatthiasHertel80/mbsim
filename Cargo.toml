@@ -7,7 +7,7 @@ version = "0.3.1"
 edition = "2021"
 license = "Apache-2.0"
 rust-version = "1.95"
-repository = "https://github.com/MatthiasHertelArm/microbit-v2-sim"
+repository = "https://github.com/MatthiasHertel80/mbsim"
 
 [workspace.dependencies]
 mbsim-core = { path = "crates/mbsim-core" }

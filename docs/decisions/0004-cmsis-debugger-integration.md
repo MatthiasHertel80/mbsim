@@ -15,7 +15,7 @@ that patches the extension's templates, and a new extension release can undo tha
    `-C` parameters whose last component is `headless`, `speed`, `uart_port` or `persist`, for example
    `-C sim.headless=1`; other FVP parameters are ignored.
    A csolution selects it with `debugger: name: Arm-FVP, model: <path to mbsim>`. Nothing is installed.
-2. **Own adapter `microbit-v2-sim` (mode B).** `cmsis/microbit-v2-sim.adapter.json` and the
+2. **Own adapter `mbsim` (mode B; `microbit-v2-sim` up to 0.3).** `cmsis/mbsim.adapter.json` and the
    `debug-adapters.yml` entry, installed by `mbsim register-cmsis-adapter --apply` with a backup.
    `mbsim gdbserver` takes pyOCD's options, so the template differs from pyOCD's only in the server name.
 3. **Hand-written launch.json (mode C)** with `"updateConfiguration": "manual"`, keeping the `cmsis` node

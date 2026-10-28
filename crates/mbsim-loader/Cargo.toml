@@ -1,6 +1,6 @@
 [package]
 name = "mbsim-loader"
-description = "ELF, Intel HEX and cbuild-run loading for the micro:bit V2 simulator"
+description = "ELF, Intel HEX and cbuild-run loading for mbsim"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

@@ -1,6 +1,6 @@
 [package]
 name = "mbsim-gui"
-description = "GUI of the micro:bit V2 simulator: board optics and inputs"
+description = "GUI of mbsim: board optics and inputs"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

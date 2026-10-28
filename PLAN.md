@@ -1,4 +1,4 @@
-# Plan: `microbit-v2-sim` — a BBC micro:bit V2 simulator with a CMSIS-Debugger GDB server
+# Plan: `mbsim` — a simulator that works with the BBC micro:bit V2, with a CMSIS-Debugger GDB server
 
 > **Status (2026-10-13):** M1, M2 and M4 are implemented; M3 without the random lockstep corpus and
 > CoreValidation (the core is checked by a 174-group ISA test against the FVP); M5 without snapshot tests.
@@ -647,7 +647,8 @@ Rough sizes in person-weeks for one engineer experienced in Rust and Cortex-M. A
 
 Open decisions for the project owner:
 
-1. Project and binary name for a public release (`microbit-v2-sim` / `mbsim` is a working title).
+1. ~~Project and binary name for a public release~~ — `mbsim`, see
+   [decision 0008](docs/decisions/0008-name-and-trademarks.md).
 2. Licence: Apache-2.0 like the BSP?
 3. Priority of mode D (pyOCD remote probe) against phase-2 peripherals after 0.1.
 4. Minimum host for the real-time requirement R6.

@@ -12,3 +12,4 @@ replaced keeps its file and links to the one that replaces it.
 | [0005](0005-gui-egui-wgpu.md) | eframe/egui with wgpu; LED glow from additive sprites |
 | [0006](0006-reference-fvp.md) | The Arm FVP as the reference for the core, recorded once |
 | [0007](0007-hand-written-peripherals.md) | Hand-written peripheral models, no SVD code generator |
+| [0008](0008-name-and-trademarks.md) | Name `mbsim`, no third-party marks in names, a personal project |

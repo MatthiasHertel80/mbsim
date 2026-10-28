@@ -1,9 +1,10 @@
-# microbit-v2-sim
+# mbsim
 
-[![CI](https://github.com/MatthiasHertelArm/microbit-v2-sim/actions/workflows/ci.yml/badge.svg)](https://github.com/MatthiasHertelArm/microbit-v2-sim/actions/workflows/ci.yml)
+[![CI](https://github.com/MatthiasHertel80/mbsim/actions/workflows/ci.yml/badge.svg)](https://github.com/MatthiasHertel80/mbsim/actions/workflows/ci.yml)
 
-Instruction-set simulator of the BBC micro:bit V2 (Nordic nRF52833, Cortex-M4F) with a GDB server for the
-Arm CMSIS Debugger and a GUI that shows the board. Written in Rust for Windows, macOS and Linux.
+Instruction-set simulator that works with the BBC micro:bit V2 (Nordic nRF52833, Arm® Cortex®-M4F), with a
+GDB server for the Arm CMSIS Debugger and a window that shows the board. Written in Rust for Windows, macOS
+and Linux. A personal open-source project, see [Trademarks and affiliation](#trademarks-and-affiliation).
 
 It simulates the board that the CMSIS-Pack `MicroBit::MicroBit_V2_BSP` describes, so the BSP examples
 (Blinky, BoardTest) run unmodified without hardware. MicroPython 2.1 (CODAL) runs too: display, buttons,
@@ -34,7 +35,7 @@ runs BoardTest at about 90 MIPS, 16× real time.
 
 ## Install
 
-[Releases](https://github.com/MatthiasHertelArm/microbit-v2-sim/releases) have one archive per host:
+[Releases](https://github.com/MatthiasHertel80/mbsim/releases) have one archive per host:
 Linux, macOS and Windows, each on x64 and arm64. Each holds `mbsim` (`mbsim.exe`), this README, the
 licence and the CMSIS Debugger adapter files in `cmsis/`; `SHA256SUMS` has the checksums.
 
@@ -116,9 +117,10 @@ Three ways to use it in VS Code:
    sends 0x04, for test runs), `out_file=-` (UART on stdout), `speed`, `uart_port`,
    `semihosting-enable`, `persist`, `mic` (host microphone on). `--simlimit` and `--stat` work as on
    the FVP.
-2. **Own debug adapter `microbit-v2-sim`** — `mbsim register-cmsis-adapter` shows where it would install
-   [cmsis/microbit-v2-sim.adapter.json](cmsis/microbit-v2-sim.adapter.json) and the `debug-adapters.yml`
-   entry; `--apply --backup-dir DIR` installs them. Then `debugger: name: microbit-v2-sim`.
+2. **Own debug adapter `mbsim`** — `mbsim register-cmsis-adapter` shows where it would install
+   [cmsis/mbsim.adapter.json](cmsis/mbsim.adapter.json) and the `debug-adapters.yml` entry;
+   `--apply --backup-dir DIR` installs them. Then `debugger: name: mbsim` (`microbit-v2-sim`, the name up
+   to 0.3, still works).
 3. **Hand-written `launch.json`** — [cmsis/launch.example.json](cmsis/launch.example.json), with
    `"updateConfiguration": "manual"` so CMSIS Solution leaves it alone.
 
@@ -191,4 +193,16 @@ the battery connector, and edge-connector devices. Timing of flash wait states a
 approximate. The behaviour that needs a measurement on a real board (FICR contents, SysTick CALIB, touch
 counts, LED brightness) is listed in PLAN.md under the first steps.
 
-"micro:bit" is a trademark of the Micro:bit Educational Foundation; this project is not affiliated with it.
+## Trademarks and affiliation
+
+mbsim is a personal open-source project. It is not an Arm product and Arm does not support it. It is not
+affiliated with, sponsored or endorsed by Arm, the Micro:bit Educational Foundation, the BBC or Nordic
+Semiconductor. Their names appear here only to say what mbsim works with.
+
+Arm, Cortex and Keil are registered trademarks of Arm Limited (or its subsidiaries) in the US and/or
+elsewhere. micro:bit is a trademark of the Micro:bit Educational Foundation. BBC is a trademark of the
+British Broadcasting Corporation. Nordic Semiconductor is a trademark of Nordic Semiconductor ASA. Other
+names are trademarks of their respective owners.
+
+The board model and artwork follow the published micro:bit V2.2.1 schematic and board dimensions of the
+Micro:bit Educational Foundation (CC BY-SA 4.0).

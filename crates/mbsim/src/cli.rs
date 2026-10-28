@@ -10,7 +10,7 @@ usage:
   mbsim erase                               erase the flash of a running simulator
   mbsim info [--cbuild-run FILE]            target information
   mbsim register-cmsis-adapter [--extension DIR] [--toolbox DIR] [--apply --backup-dir DIR]
-                                            add the microbit-v2-sim adapter to CMSIS Solution
+                                            add the mbsim debug adapter to CMSIS Solution
   mbsim gdbserver [--cbuild-run FILE] [--port N] [--telnet-port N] [--persist]
                                             GDB server with pyOCD-compatible options
   mbsim -C GDBServer.port=N -a IMAGE [...]  FVP-compatible options (CMSIS Arm-FVP debug adapter):
@@ -92,7 +92,7 @@ impl Default for Config {
             verbose: false,
             help: false,
             version: false,
-            title: "BBC micro:bit V2 simulator".into(),
+            title: "mbsim".into(),
             mic: false,
             scenario: None,
             control_port: crate::control::DEFAULT_PORT,

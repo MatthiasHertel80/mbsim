@@ -1,6 +1,6 @@
 [package]
 name = "mbsim-gdb"
-description = "GDB remote serial protocol server of the micro:bit V2 simulator (CMSIS Debugger compatible)"
+description = "GDB remote serial protocol server of mbsim (CMSIS Debugger compatible)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

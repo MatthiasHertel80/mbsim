@@ -1,7 +1,7 @@
 # Getting started
 
-mbsim runs firmware for the BBC micro:bit V2 on your computer, in a window that shows the board. There are
-three ways to use it:
+mbsim runs firmware that works with the BBC micro:bit V2 on your computer, in a window that shows the board.
+There are three ways to use it:
 
 - [Standalone with your own firmware](#standalone-with-your-own-firmware): an `.elf`, `.hex` or `.bin`
   built with any toolchain.
@@ -15,7 +15,7 @@ The [README](../README.md) is the reference for all options; `mbsim --help` list
 ## Install
 
 Download the archive for your computer from the
-[releases](https://github.com/MatthiasHertelArm/microbit-v2-sim/releases), unpack it and put `mbsim`
+[releases](https://github.com/MatthiasHertel80/mbsim/releases), unpack it and put `mbsim`
 (`mbsim.exe` on Windows) on your `PATH`.
 
 - macOS: the binary is not signed. Clear the quarantine attribute once:
@@ -104,7 +104,7 @@ start with `--mic`. Then `microphone.sound_level()` follows your voice.
 
 ## In Keil Studio for VS Code
 
-Keil Studio for VS Code is the Arm Keil Studio Pack of extensions, which includes CMSIS Solution and the
+Keil® Studio for VS Code is the Arm® Keil Studio Pack of extensions, which includes CMSIS Solution and the
 CMSIS Debugger. mbsim needs no extension of its own: CMSIS Solution starts it like an Arm FVP.
 
 1. **Get a project for the board.** The board support pack `MicroBit::MicroBit_V2_BSP` describes the board
@@ -164,7 +164,7 @@ mbsim register-cmsis-adapter                                  # shows what it wo
 mbsim register-cmsis-adapter --apply --backup-dir ~/mbsim-backup
 ```
 
-Then use `debugger: name: microbit-v2-sim` in place of `name: Arm-FVP` (no `model:` line; `mbsim` must be
+Then use `debugger: name: mbsim` in place of `name: Arm-FVP` (no `model:` line; `mbsim` must be
 on the `PATH`). The adapter lives in the extension's folder, so register it again after CMSIS Solution
 updates.
 

@@ -1,6 +1,6 @@
-//! `mbsim register-cmsis-adapter`: adds the `microbit-v2-sim` debug adapter to the CMSIS
-//! Solution extension and CMSIS-Toolbox catalogs, so a csolution can select it with
-//! `debugger: name: microbit-v2-sim`.
+//! `mbsim register-cmsis-adapter`: adds the `mbsim` debug adapter to the CMSIS Solution
+//! extension and CMSIS-Toolbox catalogs, so a csolution can select it with `debugger: name: mbsim`
+//! (or `microbit-v2-sim`, its name up to 0.3).
 //!
 //! Dry run by default. `--apply --backup-dir DIR` writes, after backing up every changed file
 //! byte for byte (with a manifest). Existing bytes of the catalogs are kept; the entry is
@@ -8,10 +8,12 @@
 
 use std::path::{Path, PathBuf};
 
-const TEMPLATE: &str = include_str!("../../../cmsis/microbit-v2-sim.adapter.json");
-const ENTRY: &str = include_str!("../../../cmsis/microbit-v2-sim.debug-adapter.yml");
-const NAME: &str = "microbit-v2-sim";
-const TEMPLATE_FILE: &str = "microbit-v2-sim.adapter.json";
+const TEMPLATE: &str = include_str!("../../../cmsis/mbsim.adapter.json");
+const ENTRY: &str = include_str!("../../../cmsis/mbsim.debug-adapter.yml");
+const NAME: &str = "mbsim";
+/// The adapter's name up to 0.3; that entry also answers to `mbsim`, so it is left alone.
+const OLD_NAME: &str = "microbit-v2-sim";
+const TEMPLATE_FILE: &str = "mbsim.adapter.json";
 
 fn newest_extension() -> Option<PathBuf> {
     let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))?;
@@ -96,6 +98,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     catalogs.extend(toolboxes.iter().map(|t| t.join("etc/debug-adapters.yml")));
 
     let mut actions = Vec::new();
+    let mut old_entries = false;
     for c in &catalogs {
         let Ok(text) = std::fs::read_to_string(c) else {
             println!("skip (not found): {}", c.display());
@@ -108,6 +111,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
             println!("already registered: {}", c.display());
             continue;
         }
+        if text.contains(&format!("name: \"{OLD_NAME}\"")) {
+            println!("already registered as {OLD_NAME}, which also answers to {NAME}: {}", c.display());
+            old_entries = true;
+            continue;
+        }
         let mut new = text.clone();
         if !new.ends_with('\n') {
             new.push('\n');
@@ -116,11 +124,14 @@ pub fn run(args: &[String]) -> Result<(), String> {
         new.push_str(&entry_items());
         actions.push(Action { path: c.clone(), new_content: new.into_bytes(), exists: true });
     }
-    let tpath = ext.join("templates/debug").join(TEMPLATE_FILE);
-    match std::fs::read_to_string(&tpath) {
-        Ok(t) if t == template => println!("template up to date: {}", tpath.display()),
-        Ok(_) => return Err(format!("{} exists with different content; remove it first", tpath.display())),
-        Err(_) => actions.push(Action { path: tpath, new_content: template.into_bytes(), exists: false }),
+    // the entries of 0.3 and earlier use their own template file
+    if !(old_entries && actions.is_empty()) {
+        let tpath = ext.join("templates/debug").join(TEMPLATE_FILE);
+        match std::fs::read_to_string(&tpath) {
+            Ok(t) if t == template => println!("template up to date: {}", tpath.display()),
+            Ok(_) => return Err(format!("{} exists with different content; remove it first", tpath.display())),
+            Err(_) => actions.push(Action { path: tpath, new_content: template.into_bytes(), exists: false }),
+        }
     }
 
     if actions.is_empty() {

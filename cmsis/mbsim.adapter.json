@@ -27,7 +27,7 @@
     },
     "launch": {
         "singlecore-launch": {
-            "name": "micro:bit V2 simulator (launch)",
+            "name": "mbsim (launch)",
             "type": "gdbtarget",
             "request": "launch",
             "cwd": "<%= data.cwd %>",
@@ -75,7 +75,7 @@
             }
         },
         "singlecore-attach": {
-            "name": "micro:bit V2 simulator (attach)",
+            "name": "mbsim (attach)",
             "type": "gdbtarget",
             "request": "attach",
             "cwd": "<%= data.cwd %>",

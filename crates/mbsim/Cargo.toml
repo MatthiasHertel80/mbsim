@@ -1,6 +1,6 @@
 [package]
 name = "mbsim"
-description = "BBC micro:bit V2 simulator with a GDB server for the Arm CMSIS Debugger"
+description = "Simulator that works with the BBC micro:bit V2, with a GDB server for the Arm CMSIS Debugger"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

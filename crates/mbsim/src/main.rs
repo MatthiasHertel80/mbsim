@@ -1,4 +1,4 @@
-//! `mbsim`: BBC micro:bit V2 simulator.
+//! `mbsim`: simulator that works with the BBC micro:bit V2.
 //!
 //! Command lines:
 //! - `mbsim [run] [IMAGE] [options]`: run an image (GUI unless `--headless`).
@@ -117,7 +117,7 @@ fn subcommand(args: &[String]) -> Option<i32> {
             Some(0)
         }
         "info" => {
-            println!("BBC micro:bit V2 simulator {}", env!("CARGO_PKG_VERSION"));
+            println!("mbsim {}", env!("CARGO_PKG_VERSION"));
             println!("  device: nRF52833_xxAA (Cortex-M4F r0p1, 512 KB flash, 128 KB RAM), board MicroBit::microbit-v2 V2.2");
             if let Some(cr) = opt("--cbuild-run") {
                 match RunConfig::load(std::path::Path::new(&cr)) {
